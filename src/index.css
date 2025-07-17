@@ -1,0 +1,21 @@
+@import "@picocss/pico";
+
+a[role="button"].custom-pink {
+  background: #666;
+  color: #fff;
+  border: none;
+}
+
+a[role="button"].neon-pink {
+  background: #ff2fd6;
+  color: #fff;
+  border: none;
+  box-shadow: 0 0 8px #ff2fd6, 0 0 16px #ff2fd6;
+  text-shadow: 0 0 2px #fff, 0 0 8px #ff2fd6;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+a[role="button"].neon-pink:hover,
+a[role="button"].neon-pink:focus {
+  background: #ff5eea;
+  box-shadow: 0 0 16px #ff2fd6, 0 0 32px #ff2fd6;
+}
