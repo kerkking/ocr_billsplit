@@ -328,7 +328,7 @@ function OCRMode() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.nothinghere}`
+          "Authorization": `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
         },
         body: JSON.stringify({
           model: "gpt-4o",
