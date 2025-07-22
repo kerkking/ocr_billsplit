@@ -1,0 +1,20 @@
+description: Ultralytics best model trained on /Users/kerk.ying.ng/Projects/ocr_web/ocr_web/data.yaml
+author: Ultralytics
+date: '2025-07-19T00:43:45.167631'
+version: 8.3.168
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: bill_region
+args:
+  batch: 1
+  half: false
+  int8: false
+  nms: false
+channels: 3

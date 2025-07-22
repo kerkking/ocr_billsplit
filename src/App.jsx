@@ -1,8 +1,177 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
 import ImageCropper from './ImageCropper';
+import * as tf from '@tensorflow/tfjs';
 
 function Home() {
+  const fileInputRef = React.useRef();
+  const navigate = useNavigate();
+
+  const [autoCropLoading, setAutoCropLoading] = React.useState(false);
+  const [autoCropError, setAutoCropError] = React.useState(null);
+
+  async function handleAutoCropUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setAutoCropLoading(true);
+    setAutoCropError(null);
+    
+    try {
+      const img = new window.Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+      });
+
+      // Load the YOLO model
+      const model = await tf.loadGraphModel('/best_web_model/model.json');
+      
+      // Preprocess image for YOLO (resize to 640x640 and normalize)
+      const inputTensor = tf.browser.fromPixels(img)
+        .resizeBilinear([640, 640])
+        .expandDims(0)
+        .div(255.0);
+
+      // Run inference
+      const predictions = await model.executeAsync(inputTensor);
+      
+      // Handle model outputs (array or single tensor)
+      let outputs;
+      if (Array.isArray(predictions)) {
+        outputs = predictions[0]; // Take first output tensor
+      } else {
+        outputs = predictions;
+      }
+      
+      const outputData = await outputs.data();
+      const outputShape = outputs.shape;
+      
+      // Parse YOLO output: Handle different formats
+      let bestBox = null;
+      let maxConfidence = 0;
+      
+      if (outputShape.length === 3) {
+        const dim1 = outputShape[1];
+        const dim2 = outputShape[2];
+        
+        let numDetections, featuresPerDetection;
+        
+        // Determine the format
+        if (dim2 >= 4 && dim1 > dim2) {
+          // Format: [batch, num_detections, features]
+          numDetections = dim1;
+          featuresPerDetection = dim2;
+        } else if (dim1 >= 4 && dim2 > dim1) {
+          // Format: [batch, features, num_detections] - transposed
+          numDetections = dim2;
+          featuresPerDetection = dim1;
+        } else {
+          throw new Error(`Unsupported output shape: ${outputShape}`);
+        }
+        
+        // Iterate through detections
+        for (let i = 0; i < numDetections; i++) {
+          let x, y, w, h, confidence;
+          
+          if (dim2 >= 4 && dim1 > dim2) {
+            // [batch, num_detections, features]
+            const offset = i * featuresPerDetection;
+            x = outputData[offset + 0];
+            y = outputData[offset + 1];
+            w = outputData[offset + 2];
+            h = outputData[offset + 3];
+            confidence = outputData[offset + 4] || outputData[offset + Math.min(4, featuresPerDetection - 1)];
+          } else {
+            // [batch, features, num_detections] - transposed
+            x = outputData[i + 0 * numDetections];
+            y = outputData[i + 1 * numDetections];
+            w = outputData[i + 2 * numDetections];
+            h = outputData[i + 3 * numDetections];
+            confidence = outputData[i + 4 * numDetections] || outputData[i + Math.min(4, featuresPerDetection - 1) * numDetections];
+          }
+          
+          if (confidence > maxConfidence && confidence > 0.3) { // Confidence threshold
+            maxConfidence = confidence;
+            bestBox = { x, y, w, h, confidence };
+          }
+        }
+      } else if (outputShape.length === 2) {
+        // Handle 2D output: [num_detections, features]
+        const numDetections = outputShape[0];
+        const featuresPerDetection = outputShape[1];
+        
+        for (let i = 0; i < numDetections; i++) {
+          const offset = i * featuresPerDetection;
+          const x = outputData[offset + 0];
+          const y = outputData[offset + 1];
+          const w = outputData[offset + 2];
+          const h = outputData[offset + 3];
+          const confidence = outputData[offset + 4] || outputData[offset + Math.min(4, featuresPerDetection - 1)];
+          
+          if (confidence > maxConfidence && confidence > 0.3) {
+            maxConfidence = confidence;
+            bestBox = { x, y, w, h, confidence };
+          }
+        }
+      } else {
+        throw new Error(`Unsupported output dimensions: ${outputShape.length}D`);
+      }
+      
+      if (!bestBox) {
+        throw new Error(`No receipt detected in the image. Max confidence found: ${maxConfidence.toFixed(4)}`);
+      }
+      
+      // The model outputs coordinates relative to 640x640 input, need to scale to original image
+      const MODEL_INPUT_SIZE = 640;
+      const scaleX = img.naturalWidth / MODEL_INPUT_SIZE;
+      const scaleY = img.naturalHeight / MODEL_INPUT_SIZE;
+      
+      // Convert from center coordinates to corner coordinates (in model input space)
+      const xmin_model = bestBox.x - bestBox.w / 2;
+      const ymin_model = bestBox.y - bestBox.h / 2;
+      const xmax_model = bestBox.x + bestBox.w / 2;
+      const ymax_model = bestBox.y + bestBox.h / 2;
+      
+      // Scale to original image dimensions
+      const cropX = Math.max(0, Math.min(xmin_model * scaleX, img.naturalWidth));
+      const cropY = Math.max(0, Math.min(ymin_model * scaleY, img.naturalHeight));
+      const cropWidth = Math.min(img.naturalWidth - cropX, Math.max(0, (xmax_model - xmin_model) * scaleX));
+      const cropHeight = Math.min(img.naturalHeight - cropY, Math.max(0, (ymax_model - ymin_model) * scaleY));
+      
+      // Validate crop parameters
+      if (cropWidth <= 0 || cropHeight <= 0) {
+        throw new Error(`Invalid crop dimensions: ${cropWidth}x${cropHeight}. Detection may be invalid.`);
+      }
+
+      // Create cropped image using canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+      const croppedDataUrl = canvas.toDataURL();
+
+      // Clean up tensors
+      inputTensor.dispose();
+      if (Array.isArray(predictions)) {
+        predictions.forEach(tensor => tensor.dispose());
+      } else {
+        predictions.dispose();
+      }
+
+      // Navigate to OCR page with cropped image
+      navigate('/ocr-autocrop', { state: { croppedImage: croppedDataUrl } });
+      
+    } catch (error) {
+      console.error('Auto-crop failed:', error);
+      setAutoCropError(error.message || 'Failed to auto-crop image. Please try again.');
+    } finally {
+      setAutoCropLoading(false);
+    }
+  }
+
   return (
     <main className="container">
       <section style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
@@ -11,6 +180,21 @@ function Home() {
         <nav style={{ margin: '2rem 0', display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', maxWidth: 320 }}>
           <Link to="/manual" role="button">Manual Mode</Link>
           <Link to="/ocr" role="button" className="neon-pink">Upload Receipt</Link>
+          <input
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            ref={fileInputRef}
+            onChange={handleAutoCropUpload}
+          />
+          <button type="button" onClick={() => fileInputRef.current.click()} disabled={autoCropLoading}>
+            {autoCropLoading ? "Processing..." : "Upload and Autocrop"}
+          </button>
+          {autoCropError && (
+            <p style={{ color: 'red', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+              {autoCropError}
+            </p>
+          )}
         </nav>
       </section>
     </main>
@@ -277,9 +461,9 @@ function ManualMode() {
   );
 }
 
-function OCRMode() {
-  const [showCropper, setShowCropper] = React.useState(true);
-  const [croppedImage, setCroppedImage] = React.useState(null);
+function OCRMode({ initialCroppedImage = null }) {
+  const [showCropper, setShowCropper] = React.useState(!initialCroppedImage);
+  const [croppedImage, setCroppedImage] = React.useState(initialCroppedImage);
   const [ocrText, setOcrText] = React.useState("");
   const [ocrLoading, setOcrLoading] = React.useState(false);
   const [llmText, setLlmText] = React.useState("");
@@ -306,7 +490,7 @@ function OCRMode() {
       Tesseract.recognize(
         croppedImage,
         'eng',
-        { logger: m => {/* Optionally log progress */} }
+        { logger: () => {/* Optionally log progress */} }
       ).then(({ data: { text } }) => {
         setOcrText(text);
         setOcrLoading(false);
@@ -596,6 +780,14 @@ function OCRMode() {
   );
 }
 
+function OcrAutocropPage() {
+  const location = useLocation();
+  const initialCroppedImage = location.state?.croppedImage;
+  // This page now uses the same logic as OCRMode, but starts with a cropped image
+  // For brevity, we are using the OCRMode component and just passing the initial cropped image
+  return <OCRMode initialCroppedImage={initialCroppedImage} />;
+}
+
 export default function App() {
   return (
     <Router>
@@ -609,6 +801,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/ocr" element={<OCRMode />} />
+        <Route path="/ocr-autocrop" element={<OcrAutocropPage />} />
         <Route path="/manual" element={<ManualMode />} />
         <Route path="/cropper-test" element={<ImageCropper />} />
       </Routes>
