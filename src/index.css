@@ -6,7 +6,8 @@ a[role="button"].custom-pink {
   border: none;
 }
 
-a[role="button"].neon-pink {
+a[role="button"].neon-pink,
+button.neon-pink {
   background: #ff2fd6;
   color: #fff;
   border: none;
@@ -15,7 +16,9 @@ a[role="button"].neon-pink {
   transition: background 0.2s, box-shadow 0.2s;
 }
 a[role="button"].neon-pink:hover,
-a[role="button"].neon-pink:focus {
+a[role="button"].neon-pink:focus,
+button.neon-pink:hover,
+button.neon-pink:focus {
   background: #ff5eea;
   box-shadow: 0 0 16px #ff2fd6, 0 0 32px #ff2fd6;
 }

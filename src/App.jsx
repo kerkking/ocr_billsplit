@@ -129,10 +129,15 @@ function Home() {
       const scaleY = img.naturalHeight / MODEL_INPUT_SIZE;
       
       // Convert from center coordinates to corner coordinates (in model input space)
-      const xmin_model = bestBox.x - bestBox.w / 2;
-      const ymin_model = bestBox.y - bestBox.h / 2;
-      const xmax_model = bestBox.x + bestBox.w / 2;
-      const ymax_model = bestBox.y + bestBox.h / 2;
+      // Add padding to ensure we don't crop too tightly and miss edges
+      const PADDING_FACTOR = 0.05; // 5% padding on all sides
+      const paddingX = bestBox.w * PADDING_FACTOR;
+      const paddingY = bestBox.h * PADDING_FACTOR;
+      
+      const xmin_model = (bestBox.x - bestBox.w / 2) - paddingX;
+      const ymin_model = (bestBox.y - bestBox.h / 2) - paddingY;
+      const xmax_model = (bestBox.x + bestBox.w / 2) + paddingX;
+      const ymax_model = (bestBox.y + bestBox.h / 2) + paddingY;
       
       // Scale to original image dimensions
       const cropX = Math.max(0, Math.min(xmin_model * scaleX, img.naturalWidth));
@@ -179,7 +184,7 @@ function Home() {
         <p>Split bills easily by uploading receipts or manual entry. Minimal, fast, and private.</p>
         <nav style={{ margin: '2rem 0', display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', maxWidth: 320 }}>
           <Link to="/manual" role="button">Manual Mode</Link>
-          <Link to="/ocr" role="button" className="neon-pink">Upload Receipt</Link>
+          <Link to="/ocr" role="button">Upload Receipt</Link>
           <input
             type="file"
             accept="image/*"
@@ -187,7 +192,7 @@ function Home() {
             ref={fileInputRef}
             onChange={handleAutoCropUpload}
           />
-          <button type="button" onClick={() => fileInputRef.current.click()} disabled={autoCropLoading}>
+          <button type="button" onClick={() => fileInputRef.current.click()} disabled={autoCropLoading} className="neon-pink">
             {autoCropLoading ? "Processing..." : "Upload and Autocrop"}
           </button>
           {autoCropError && (
