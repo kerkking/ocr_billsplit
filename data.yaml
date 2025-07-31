@@ -1,0 +1,13 @@
+train: /Users/kerk.ying.ng/Projects/ocr_web/ocr_web/train/images
+val: /Users/kerk.ying.ng/Projects/ocr_web/ocr_web/valid/images
+test: /Users/kerk.ying.ng/Projects/ocr_web/ocr_web/test/images
+
+nc: 1
+names: ['bill_region']
+
+roboflow:
+  workspace: ocrreceipts
+  project: receipt-autocrop
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/ocrreceipts/receipt-autocrop/dataset/2

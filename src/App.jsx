@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
 import ImageCropper from './ImageCropper';
 import * as tf from '@tensorflow/tfjs';
+import { analytics } from './analytics';
 
 function Home() {
   const fileInputRef = React.useRef();
@@ -13,6 +14,9 @@ function Home() {
   async function handleAutoCropUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
+    
+    // Track receipt upload
+    analytics.trackReceiptUpload(file.size, file.type);
     
     setAutoCropLoading(true);
     setAutoCropError(null);
@@ -120,8 +124,12 @@ function Home() {
       }
       
       if (!bestBox) {
+        analytics.trackAutoCrop(false, maxConfidence, 'no_receipt_detected');
         throw new Error(`No receipt detected in the image. Max confidence found: ${maxConfidence.toFixed(4)}`);
       }
+      
+      // Track successful auto-crop
+      analytics.trackAutoCrop(true, bestBox.confidence);
       
       // The model outputs coordinates relative to 640x640 input, need to scale to original image
       const MODEL_INPUT_SIZE = 640;
@@ -171,6 +179,7 @@ function Home() {
       
     } catch (error) {
       console.error('Auto-crop failed:', error);
+      analytics.trackAutoCrop(false, null, error.message);
       setAutoCropError(error.message || 'Failed to auto-crop image. Please try again.');
     } finally {
       setAutoCropLoading(false);
@@ -183,8 +192,8 @@ function Home() {
         <h1>Bill Splitter</h1>
         <p>Split bills easily by uploading receipts or manual entry. Minimal, fast, and private.</p>
         <nav style={{ margin: '2rem 0', display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', maxWidth: 320 }}>
-          <Link to="/manual" role="button">Manual Mode</Link>
-          <Link to="/ocr" role="button">Upload Receipt</Link>
+          <Link to="/manual" role="button" onClick={() => analytics.trackModeSwitch('home', 'manual')}>Manual Mode</Link>
+          <Link to="/ocr" role="button" onClick={() => analytics.trackModeSwitch('home', 'ocr')}>Upload Receipt</Link>
           <input
             type="file"
             accept="image/*"
