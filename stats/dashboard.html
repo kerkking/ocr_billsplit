@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Billsplit Stats</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --good: #0ca30c; --critical: #d03b3b; --warning: #fab219;
+  --good-text: #006300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --good-text: #0ca30c;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19;
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --good-text: #0ca30c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; font-weight: 600; }
+.sub { color: var(--ink-2); font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--ring); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; color: var(--ink-2); padding: 6px 12px; font: inherit; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--grid); color: var(--ink); font-weight: 600; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px; min-width: 0; }
+.grid { display: grid; gap: 12px; }
+.tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 12px; }
+.hero { grid-column: span 2; }
+@media (max-width: 520px) { .hero { grid-column: span 1; } }
+.tile .label { color: var(--ink-2); font-size: 13px; }
+.tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+.hero .value { font-size: 52px; line-height: 1.05; }
+.tile .note { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.two { grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
+@media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+.card h2 { font-size: 15px; margin: 0; font-weight: 600; }
+.card .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.link { background: none; border: 0; color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; padding: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
+.legend i { display: inline-block; width: 14px; height: 2px; border-radius: 1px; vertical-align: middle; margin-right: 6px; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); white-space: nowrap; display: none; z-index: 2; }
+.tip b { display: block; margin-bottom: 4px; font-weight: 600; }
+.tip .row { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.tip .row span:first-child { color: var(--ink-2); }
+.tip .row span:last-child { font-variant-numeric: tabular-nums; }
+.tip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--ink-2); font-weight: 500; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+.status { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-size: 13px; }
+.kv dt { color: var(--ink-2); } .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+.funnel .row { display: grid; grid-template-columns: 130px 1fr 72px; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+.funnel .bar { height: 16px; border-radius: 0 4px 4px 0; background: var(--s1); min-width: 2px; }
+.funnel .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.funnel .val small { color: var(--muted); }
+.empty { color: var(--muted); padding: 24px 0; text-align: center; }
+.err { color: var(--critical); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Billsplit stats</h1>
+      <div class="sub" id="updated">Loading…</div>
+    </div>
+    <div class="seg" role="group" aria-label="Time range">
+      <button data-range="24h" aria-pressed="true">24 hours</button>
+      <button data-range="7d" aria-pressed="false">7 days</button>
+      <button data-range="30d" aria-pressed="false">30 days</button>
+    </div>
+  </header>
+
+  <section class="grid tiles" id="tiles"></section>
+
+  <section class="grid two">
+    <div class="card">
+      <div class="head"><h2>Activity</h2><button class="link" data-table="activity">Show table</button></div>
+      <div class="legend" id="legend-activity"></div>
+      <div class="chart" id="chart-activity"></div>
+    </div>
+    <div class="card">
+      <div class="head"><h2>Funnel</h2><span class="sub">share of page loads</span></div>
+      <div class="funnel" id="funnel"></div>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="card">
+      <div class="head"><h2>LLM latency</h2><button class="link" data-table="latency">Show table</button></div>
+      <div class="legend" id="legend-latency"></div>
+      <div class="chart" id="chart-latency"></div>
+    </div>
+    <div class="card">
+      <div class="head"><h2>LLM generation speed (tokens/s)</h2><button class="link" data-table="tps">Show table</button></div>
+      <div class="chart" id="chart-tps"></div>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="card">
+      <div class="head"><h2>Model & host</h2><span class="sub" id="live-age"></span></div>
+      <div id="live"></div>
+    </div>
+    <div class="card">
+      <div class="head"><h2>Tokens</h2><span class="sub">in range</span></div>
+      <div id="tokens"></div>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="card">
+      <div class="head"><h2>Blocked probes</h2><button class="link" data-table="probes">Show table</button></div>
+      <div class="sub" style="margin-bottom:6px">Requests for paths that don't exist (scanners looking for .env, WordPress, etc.). All got a 404.</div>
+      <div class="chart" id="chart-probes"></div>
+      <div class="scroll" id="probe-paths" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <div class="head"><h2>Countries</h2><span class="sub">from Cloudflare</span></div>
+      <div class="two grid" style="margin:0">
+        <div><div class="sub" style="margin-bottom:4px">Real page loads</div><div class="funnel" id="countries-visitors"></div></div>
+        <div><div class="sub" style="margin-bottom:4px">Probes</div><div class="funnel" id="countries-probes"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>Recent LLM calls</h2><span class="sub">last 25 in range</span></div>
+    <div class="scroll" id="recent"></div>
+  </section>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = (n) => n == null ? '–' : n >= 10000 ? Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n) : Intl.NumberFormat().format(Math.round(n));
+const fmtMs = (ms) => ms == null ? '–' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(ms < 10000 ? 2 : 1) + ' s';
+const fmtBytes = (b) => b == null ? '–' : (b / 1024 ** 3).toFixed(1) + ' GB';
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+let range = '24h';
+try { range = localStorage.getItem('range') || '24h'; } catch { /* storage blocked */ }
+if (!['24h', '7d', '30d'].includes(range)) range = '24h';
+const showTable = {};
+let last = null;
+
+function bucketLabel(ts, bucketMs, long) {
+  const d = new Date(ts);
+  if (bucketMs >= 86400000) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (long) return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return bucketMs >= 6 * 3600000
+    ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })
+    : d.toLocaleTimeString(undefined, { hour: 'numeric' });
+}
+
+// ---- line chart (SVG, hover crosshair + tooltip, end labels, table fallback)
+function lineChart(el, { x, series, bucketMs, yFmt = fmt, tableKey }) {
+  if (showTable[tableKey]) return dataTable(el, x, series, bucketMs, yFmt);
+  const W = 560, H = 220, m = { t: 10, r: 64, b: 26, l: 44 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const all = series.flatMap((s) => s.data).filter((v) => v != null);
+  if (!all.length) { el.innerHTML = '<div class="empty">No data in this range yet</div>'; return; }
+  let max = Math.max(...all, 1);
+  const step = niceStep(max / 4); max = Math.ceil(max / step) * step;
+  const X = (i) => m.l + (x.length === 1 ? iw / 2 : (i / (x.length - 1)) * iw);
+  const Y = (v) => m.t + ih - (v / max) * ih;
+  let g = '';
+  for (let v = 0; v <= max + 1e-9; v += step) {
+    g += `<line x1="${m.l}" x2="${m.l + iw}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? css('--axis') : css('--grid')}" stroke-width="1"/>`;
+    g += `<text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end" fill="${css('--muted')}" font-size="11" style="font-variant-numeric:tabular-nums">${yFmt(v)}</text>`;
+  }
+  const ticks = 6, every = Math.max(1, Math.ceil(x.length / ticks));
+  for (let i = 0; i < x.length; i += every) g += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle" fill="${css('--muted')}" font-size="11">${esc(bucketLabel(x[i], bucketMs))}</text>`;
+  const labels = [];
+  for (const s of series) {
+    const col = css(s.color);
+    let d = '', pen = false;
+    s.data.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); pen = true; });
+    // isolated points (no neighbours) get a dot so they're visible
+    s.data.forEach((v, i) => { if (v != null && s.data[i - 1] == null && s.data[i + 1] == null) g += `<circle cx="${X(i)}" cy="${Y(v)}" r="4" fill="${col}" stroke="${css('--surface')}" stroke-width="2"/>`; });
+    g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const li = s.data.findLastIndex((v) => v != null);
+    if (li >= 0) {
+      g += `<circle cx="${X(li)}" cy="${Y(s.data[li])}" r="4" fill="${col}" stroke="${css('--surface')}" stroke-width="2"/>`;
+      labels.push({ y: Y(s.data[li]), x: X(li), text: yFmt(s.data[li]), name: s.short || s.name });
+    }
+  }
+  // end labels only if they don't collide; otherwise legend + tooltip carry it
+  labels.sort((a, b) => a.y - b.y);
+  const collide = labels.some((l, i) => i && l.y - labels[i - 1].y < 14);
+  if (!collide) for (const l of labels) g += `<text x="${m.l + iw + 8}" y="${l.y + 4}" fill="${css('--ink-2')}" font-size="11">${esc(l.text)}</text>`;
+  g += `<line class="xh" x1="0" x2="0" y1="${m.t}" y2="${m.t + ih}" stroke="${css('--axis')}" stroke-width="1" visibility="hidden"/>`;
+  g += `<rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" class="hit"/>`;
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map((s) => s.name).join(', '))} over time">${g}</svg><div class="tip"></div>`;
+  const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), xh = el.querySelector('.xh');
+  const move = (ev) => {
+    const r = svg.getBoundingClientRect(); const sx = (ev.clientX - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(x.length - 1, Math.round(((sx - m.l) / iw) * (x.length - 1))));
+    xh.setAttribute('x1', X(i)); xh.setAttribute('x2', X(i)); xh.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<b>${esc(bucketLabel(x[i], bucketMs, true))}</b>` + series.map((s) => `<div class="row"><span><i style="background:${css(s.color)}"></i>${esc(s.name)}</span><span>${yFmt(s.data[i])}</span></div>`).join('');
+    tip.style.display = 'block';
+    const px = (X(i) / W) * r.width; const tw = tip.offsetWidth;
+    tip.style.left = Math.min(Math.max(0, px + 12 + tw > r.width ? px - tw - 12 : px + 12), r.width - tw) + 'px';
+    tip.style.top = '8px';
+  };
+  svg.addEventListener('pointermove', move);
+  svg.addEventListener('pointerleave', () => { tip.style.display = 'none'; xh.setAttribute('visibility', 'hidden'); });
+}
+function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+function dataTable(el, x, series, bucketMs, yFmt) {
+  const rows = x.map((t, i) => ({ t, vals: series.map((s) => s.data[i]) })).filter((r) => r.vals.some((v) => v != null && v !== 0)).reverse();
+  el.innerHTML = rows.length ? `<div class="scroll" style="max-height:220px;overflow:auto"><table><thead><tr><th>Time</th>${series.map((s) => `<th class="n">${esc(s.name)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(bucketLabel(r.t, bucketMs, true))}</td>${r.vals.map((v) => `<td class="n">${yFmt(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">No data in this range yet</div>';
+}
+function flagName(c) { return c === 'XX' || c === 'T1' ? (c === 'T1' ? 'Tor' : '??') : c; }
+function legend(el, series) { el.innerHTML = series.map((s) => `<span><i style="background:${css(s.color)}"></i>${esc(s.name)}</span>`).join(''); }
+
+// ---- render
+function render(d) {
+  const t = d.totals;
+  const okRate = t.llm_calls ? Math.round((t.llm_ok / t.llm_calls) * 100) : null;
+  const tiles = [
+    { hero: true, label: 'Receipts cleaned by the LLM', value: fmt(t.llm_calls), note: t.llm_calls ? `${okRate}% succeeded · ${fmt(t.llm_calls - t.llm_ok)} failed` : 'none yet' },
+    { label: 'Page loads', value: fmt(t.page_loads), note: `${fmt(t.visitors)} unique visitors` },
+    { label: 'Receipts uploaded', value: fmt(t.receipts) },
+    { label: 'Bills split', value: fmt(t.bills), note: 'summary copied' },
+    { label: 'LLM latency p50', value: fmtMs(t.llm_p50_ms), note: 'p95 ' + fmtMs(t.llm_p95_ms) },
+    { label: 'Generation speed', value: t.tok_s_avg == null ? '–' : t.tok_s_avg.toFixed(1), note: 'tokens/s average' },
+    { label: 'Cold starts', value: fmt(t.cold_starts), note: 'model had to load (>1 s)' },
+    { label: 'Probes blocked', value: fmt(t.probes), note: 'scanner requests, 404' },
+    { label: 'Rate limited', value: fmt(t.rate_limited), note: 'requests refused (429/503)' },
+  ];
+  $('#tiles').innerHTML = tiles.map((x) => `<div class="card tile${x.hero ? ' hero' : ''}"><div class="label">${esc(x.label)}</div><div class="value">${esc(x.value)}</div>${x.note ? `<div class="note">${esc(x.note)}</div>` : ''}</div>`).join('');
+
+  const act = [
+    { name: 'Page loads', short: 'Pages', color: '--s1', data: d.series.page_loads },
+    { name: 'Receipts uploaded', color: '--s2', data: d.series.receipts },
+    { name: 'LLM cleanups', color: '--s3', data: d.series.llm_calls },
+    { name: 'Bills split', color: '--s4', data: d.series.bills },
+  ];
+  legend($('#legend-activity'), act);
+  lineChart($('#chart-activity'), { x: d.buckets, series: act, bucketMs: d.bucket_ms, tableKey: 'activity' });
+
+  const lat = [
+    { name: 'p50', color: '--s1', data: d.series.llm_p50_ms },
+    { name: 'p95', color: '--s2', data: d.series.llm_p95_ms },
+  ];
+  legend($('#legend-latency'), lat);
+  lineChart($('#chart-latency'), { x: d.buckets, series: lat, bucketMs: d.bucket_ms, yFmt: fmtMs, tableKey: 'latency' });
+  lineChart($('#chart-tps'), { x: d.buckets, series: [{ name: 'Tokens/s', color: '--s1', data: d.series.tok_s }], bucketMs: d.bucket_ms, yFmt: (v) => v == null ? '–' : v.toFixed(v < 10 ? 1 : 0), tableKey: 'tps' });
+
+  lineChart($('#chart-probes'), { x: d.buckets, series: [{ name: 'Probes', color: '--s2', data: d.series.probes }], bucketMs: d.bucket_ms, tableKey: 'probes' });
+  const pp = d.security.top_probe_paths;
+  $('#probe-paths').innerHTML = pp.length ? `<table><thead><tr><th>Top probed paths</th><th class="n">Hits</th></tr></thead><tbody>${pp.map(([p, n]) => `<tr><td><code>${esc(p)}</code></td><td class="n">${fmt(n)}</td></tr>`).join('')}</tbody></table>` : '';
+  const barList = (el, rows) => {
+    const mx = Math.max(...rows.map((r) => r[1]), 1);
+    el.innerHTML = rows.length ? rows.map(([c, n]) => `<div class="row" style="grid-template-columns:48px 1fr 40px"><span>${esc(flagName(c))}</span><div><div class="bar" style="width:${(n / mx) * 100}%"></div></div><span class="val">${fmt(n)}</span></div>`).join('') : '<div class="empty" style="padding:8px 0">None</div>';
+  };
+  barList($('#countries-visitors'), d.security.visitor_countries);
+  barList($('#countries-probes'), d.security.probe_countries);
+
+  const top = Math.max(...d.funnel.map((f) => f[1]), 1);
+  const base = d.funnel[0][1];
+  $('#funnel').innerHTML = d.funnel.map(([name, v]) => `<div class="row"><span>${esc(name)}</span><div><div class="bar" style="width:${(v / top) * 100}%" title="${esc(name)}: ${v}"></div></div><span class="val">${fmt(v)} ${base ? `<small>${Math.round((v / base) * 100)}%</small>` : ''}</span></div>`).join('');
+
+  $('#tokens').innerHTML = `<dl class="kv">
+    <dt>Prompt tokens</dt><dd>${fmt(t.prompt_tokens)}</dd>
+    <dt>Output tokens</dt><dd>${fmt(t.output_tokens)}</dd>
+    <dt>Avg per cleanup</dt><dd>${t.llm_ok ? fmt(t.prompt_tokens / t.llm_ok) + ' in · ' + fmt(t.output_tokens / t.llm_ok) + ' out' : '–'}</dd>
+    <dt>API 5xx errors</dt><dd>${fmt(t.api_5xx)}</dd>
+  </dl>`;
+
+  $('#recent').innerHTML = d.recent_llm.length ? `<table><thead><tr><th>Time</th><th>Status</th><th class="n">Latency</th><th class="n">Load</th><th class="n">In tok</th><th class="n">Out tok</th><th class="n">Tok/s</th><th class="n">Items</th><th class="n">OCR chars</th></tr></thead><tbody>${d.recent_llm.map((r) => `<tr>
+    <td>${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' }))}</td>
+    <td><span class="status"><span class="dot" style="background:${r.ok ? 'var(--good)' : 'var(--critical)'}"></span>${r.ok ? 'OK' : 'Failed' + (r.error ? ': <span class="err">' + esc(r.error) + '</span>' : '')}</span></td>
+    <td class="n">${fmtMs(r.total_ms)}</td><td class="n">${fmtMs(r.load_ms)}</td>
+    <td class="n">${fmt(r.prompt_tokens)}</td><td class="n">${fmt(r.output_tokens)}</td>
+    <td class="n">${r.tok_s == null ? '–' : r.tok_s.toFixed(1)}</td><td class="n">${fmt(r.rows)}</td><td class="n">${fmt(r.ocr_chars)}</td>
+  </tr>`).join('')}</tbody></table>` : '<div class="empty">No LLM calls in this range yet</div>';
+
+  $('#updated').textContent = 'Updated ' + new Date().toLocaleTimeString() + ' · refreshes every 30 s';
+}
+
+function renderLive(l) {
+  const o = l.ollama, h = l.host;
+  const m = o.models[0];
+  const memUsed = h.mem_total - h.mem_free;
+  const up = (s) => s > 86400 ? Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h' : s > 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm' : Math.floor(s / 60) + 'm';
+  $('#live').innerHTML = `<dl class="kv">
+    <dt>Ollama</dt><dd><span class="status"><span class="dot" style="background:${o.up ? 'var(--good)' : 'var(--critical)'}"></span>${o.up ? 'Up · v' + esc(o.version) : 'Down'}</span></dd>
+    <dt>Configured model</dt><dd>${esc(l.configured_model)}</dd>
+    <dt>In memory</dt><dd>${m ? `<span class="status"><span class="dot" style="background:var(--good)"></span>${esc(m.name)} · ${esc(m.params)} ${esc(m.quant)} · ${fmtBytes(m.vram_bytes)}</span>` : `<span class="status"><span class="dot" style="background:var(--muted)"></span>Not loaded (next call is a cold start)</span>`}</dd>
+    ${m ? `<dt>Unloads at</dt><dd>${new Date(m.expires_at).toLocaleTimeString()} (if idle)</dd>` : ''}
+    <dt>Host memory</dt><dd>${fmtBytes(memUsed)} / ${fmtBytes(h.mem_total)} used</dd>
+    <dt>Load average</dt><dd>${h.load.map((x) => x.toFixed(2)).join(' · ')}</dd>
+    <dt>Server uptime</dt><dd>${up(l.server_uptime_s)} (Mac: ${up(h.uptime_s)})</dd>
+  </dl>`;
+  $('#live-age').textContent = 'live';
+}
+
+async function load() {
+  try {
+    const [s, l] = await Promise.all([
+      fetch('api/summary?range=' + range).then((r) => r.json()),
+      fetch('api/live').then((r) => r.json()),
+    ]);
+    last = s; render(s); renderLive(l);
+  } catch (e) {
+    $('#updated').innerHTML = '<span class="err">Failed to load: ' + esc(e.message) + '</span>';
+  }
+}
+
+document.querySelectorAll('.seg button').forEach((b) => {
+  b.setAttribute('aria-pressed', String(b.dataset.range === range));
+  b.addEventListener('click', () => {
+    range = b.dataset.range;
+    try { localStorage.setItem('range', range); } catch {}
+    document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    load();
+  });
+});
+document.querySelectorAll('[data-table]').forEach((b) => b.addEventListener('click', () => {
+  const k = b.dataset.table; showTable[k] = !showTable[k];
+  b.textContent = showTable[k] ? 'Show chart' : 'Show table';
+  if (last) render(last);
+}));
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => last && render(last));
+let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => last && render(last), 150); });
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

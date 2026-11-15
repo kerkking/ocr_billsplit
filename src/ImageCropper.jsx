@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import { analytics } from './analytics';
 
 function ImageCropper({ onCrop }) {
   const [src, setSrc] = useState(null);
@@ -13,6 +14,7 @@ function ImageCropper({ onCrop }) {
   const onSelectFile = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      analytics.trackReceiptUpload(file.size, file.type);
       const reader = new FileReader();
       reader.onload = () => {
         // Preprocess: convert to grayscale and increase contrast

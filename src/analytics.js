@@ -2,6 +2,13 @@
 export const analytics = {
   // Track custom events
   trackEvent: (eventName, parameters = {}) => {
+    // Self-hosted metrics (see server.js /api/event). Fire-and-forget, never blocks the UI.
+    try {
+      const body = JSON.stringify({ name: eventName, props: parameters });
+      if (!(navigator.sendBeacon && navigator.sendBeacon('/api/event', body))) {
+        fetch('/api/event', { method: 'POST', body, keepalive: true }).catch(() => {});
+      }
+    } catch { /* ignore */ }
     if (typeof window !== 'undefined' && window.gtag) {
       window.gtag('event', eventName, {
         // Add timestamp and page info automatically
@@ -57,11 +64,12 @@ export const analytics = {
   },
 
   // Track bill splitting completion
-  trackBillSplit: (itemCount, dinerCount, totalAmount) => {
+  trackBillSplit: (itemCount, dinerCount, totalAmount, mode = null) => {
     analytics.trackEvent('bill_split_completed', {
       item_count: itemCount,
       diner_count: dinerCount,
       total_amount: totalAmount,
+      mode: mode,
       event_category: 'engagement',
       event_label: 'bill_completed'
     });

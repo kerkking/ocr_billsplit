@@ -7,15 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve": "node server.js",
+    "start": "npm run build && node server.js"
   },
   "dependencies": {
     "@picocss/pico": "^2.1.1",
     "@tensorflow/tfjs": "^4.22.0",
-    "axios": "^1.10.0",
-    "cors": "^2.8.5",
     "express": "^5.1.0",
-    "node-fetch": "^3.3.2",
+    "jose": "^6.2.17",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-easy-crop": "^5.4.2",

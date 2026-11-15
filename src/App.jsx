@@ -462,6 +462,7 @@ function ManualMode() {
             if (tableRef.current) {
               const text = tableToText(tableRef.current);
               navigator.clipboard.writeText(text);
+              analytics.trackBillSplit(items.length, diners.length, Number(results.reduce((a, b) => a + b, 0).toFixed(2)), 'manual');
             }
           }}>Copy Summary</button>
         </div>
@@ -499,6 +500,7 @@ function OCRMode({ initialCroppedImage = null }) {
     setLlmText("");
     setLlmError("");
     setShowBillForm(false);
+    const ocrStart = performance.now();
     (async () => {
       const Tesseract = await import('tesseract.js');
       Tesseract.recognize(
@@ -506,9 +508,11 @@ function OCRMode({ initialCroppedImage = null }) {
         'eng',
         { logger: () => {/* Optionally log progress */} }
       ).then(({ data: { text } }) => {
+        analytics.trackOCR(true, text.length, Math.round(performance.now() - ocrStart));
         setOcrText(text);
         setOcrLoading(false);
       }).catch(() => {
+        analytics.trackOCR(false, null, Math.round(performance.now() - ocrStart));
         setOcrText("OCR failed. Please try again.");
         setOcrLoading(false);
       });
@@ -522,33 +526,24 @@ function OCRMode({ initialCroppedImage = null }) {
     setLlmText("");
     setShowBillForm(false);
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await fetch("/api/llm-cleanup", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            { role: "system", content: "You are a helpful assistant that extracts and cleans up bill items from OCR text. Return only the cleaned, itemized bill as a table with the headers: name, quantity, price. Each row should correspond to one item. If quantity is missing, use 1. Price should be a number only, no currency symbol." },
-            { role: "user", content: ocrText }
-          ],
-          temperature: 0.2
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ocrText })
       });
       const data = await response.json();
-      if (data.choices && data.choices[0] && data.choices[0].message) {
-        setLlmText(data.choices[0].message.content);
+      if (response.ok && typeof data.content === "string") {
+        analytics.trackLLMCleanup(true, data.tokens);
+        setLlmText(data.content);
         // Try to parse the LLM output into bill items
-        const lines = data.choices[0].message.content.split('\n').filter(l => l.trim());
+        const lines = data.content.split('\n').filter(l => l.trim());
         // Find header row and start parsing from the next line
         let headerIdx = lines.findIndex(line => /name/i.test(line) && /price/i.test(line));
         let parsedItems = [];
         if (headerIdx !== -1) {
           for (let i = headerIdx + 1; i < lines.length; i++) {
             const row = lines[i].trim();
-            if (!row) continue;
+            if (!row || /^[\s|:-]+$/.test(row)) continue; // skip blank + markdown separator rows
             // Split by | or whitespace
             let cols = row.split('|').map(s => s.trim()).filter(Boolean);
             if (cols.length < 3) {
@@ -582,12 +577,13 @@ function OCRMode({ initialCroppedImage = null }) {
         setItems(parsedItems.length ? parsedItems : [{ name: "", price: "", sharedBy: [] }]);
         setShowBillForm(true);
       } else if (data.error) {
-        setLlmError("OpenAI error: " + (data.error.message || JSON.stringify(data.error)));
+        analytics.trackLLMCleanup(false, null, String(response.status));
+        setLlmError("LLM error: " + data.error);
       } else {
         setLlmError("No response from LLM. Raw response: " + JSON.stringify(data));
       }
     } catch (err) {
-      setLlmError("Failed to call OpenAI: " + err.message);
+      setLlmError("Failed to reach the LLM server: " + err.message);
     }
     setLlmLoading(false);
   };
@@ -774,6 +770,7 @@ function OCRMode({ initialCroppedImage = null }) {
                           if (tableRef.current) {
                             const text = tableToText(tableRef.current);
                             navigator.clipboard.writeText(text);
+                            analytics.trackBillSplit(items.length, diners.length, Number(results.reduce((a, b) => a + b, 0).toFixed(2)), 'ocr');
                           }
                         }}>Copy Summary</button>
                       </div>

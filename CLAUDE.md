@@ -11,9 +11,10 @@ This is a React-based web application called "Bill Splitter" that helps users sp
 - **Frontend**: React 19 with Vite as build tool
 - **Styling**: Pico CSS framework + Tailwind CSS
 - **OCR**: Tesseract.js for text extraction from images
-- **ML/AI**: TensorFlow.js for YOLO object detection model, OpenAI GPT-4 for text cleanup
+- **ML/AI**: TensorFlow.js for YOLO object detection model, local open-weight LLM (Ollama) for text cleanup
 - **Image Processing**: react-image-crop and react-easy-crop for manual cropping
 - **Routing**: React Router DOM
+- **Server**: `server.js` (Express) serves `dist/` and proxies `/api/llm-cleanup` to Ollama. See SELFHOST.md
 
 ## Architecture
 
@@ -61,11 +62,14 @@ npm run preview
 
 # Lint code
 npm run lint
+
+# Run production server (build first); dev server proxies /api to it
+npm run serve
 ```
 
 ## External Dependencies
 
-- **OpenAI API**: Requires VITE_OPENAI_API_KEY environment variable for LLM text cleanup
+- **Ollama**: running on 127.0.0.1:11434 with the model in `LLM_MODEL` pulled. The LLM prompt lives server-side in `server.js`; the client never talks to the model directly
 - **YOLO Model**: Receipt detection model files must be present in public/best_web_model/
 
 ## Dataset Structure
@@ -79,6 +83,6 @@ The repository includes YOLO training data:
 
 1. **Automatic Receipt Detection**: YOLO-based receipt boundary detection
 2. **OCR Processing**: Tesseract.js extracts text from cropped images
-3. **LLM Enhancement**: GPT-4 cleans and structures OCR output into itemized bills
+3. **LLM Enhancement**: Local LLM (default `qwen3:8b`) cleans and structures OCR output into itemized bills
 4. **Flexible Bill Splitting**: Support for service charges, GST, and per-item diner assignment
 5. **Export Functionality**: Copy bill summaries to clipboard as tab-separated text
